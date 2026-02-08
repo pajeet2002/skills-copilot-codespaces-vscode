@@ -1,192 +1,156 @@
-# Firebase Studio Prompt — Rule Automation Studio (React + MUI)
+# Firebase Studio Prompt — Rule Automation Studio (Agent Execution Workflow)
 
 Copy/paste everything below into Firebase Studio.
 
 ---
 
-Build a **static web app** named:
+Build a web app called:
 
-**Rule Automation Studio — Translation Journey (Evaluator Prototype)**
+**Rule Automation Studio — Agent Execution Workflow (Evaluator Prototype)**
 
-## Hard constraints (must follow)
+## 0) What this prototype must demonstrate
+This is an evaluator demo that visualizes the end-to-end **multi-agent translation pipeline**:
+
+1) User uploads a **Visio file** (`.vsdx` or `.vsd`)
+2) **Agent A: Visio→PDF Converter** produces a PDF artifact
+3) **Agent B: PDF→Images Converter** produces page images
+4) **Agent C: Vision Extractor** takes images and produces **Vision JSON** (diagram semantics, legend, tables, steps, decisions)
+5) **Agent D: JSON Analyzer** creates structured analysis + detected table prefixes + a decision graph
+6) **Agent E: RAG Pattern Learner** retrieves “closest existing rules”, learns patterns, and produces a pattern summary
+7) **Agent F: TypeScript Rule Generator** generates a TS rule scaffold
+8) **Agent G: Validator/Compiler** runs validation + compile checks and produces a result report
+
+### Important: static evaluator prototype
+This must be a **static, client-side prototype**. It must **NOT** call external APIs.
+
+Therefore, some stages will be **SIMULATED** but must still look realistic and traceable:
+- Visio→PDF and PDF→Images: simulated artifact generation
+- Vision API: simulated by producing a realistic Vision JSON payload (and allow user to paste their own Vision JSON)
+- RAG: simulated using a small in-app “existing rule library” dataset + simple scoring
+- Validate/compile: simulated checks with a compile-style report (PASS/WARN/FAIL)
+
+Every simulated stage must show a clear **SIMULATED** badge and a note: “In production this is done by …”
+
+## 1) Hard constraints (must follow)
 - **React + TypeScript + Vite**
-- Use **Material UI (MUI)** for UI components and styling
-- **No backend**, no auth, no external APIs, no secrets. Everything runs **in-browser**.
-- Deterministic parsing only (regex + heuristics). **Do NOT call any AI services**.
-- `npm run build` must produce a **`dist/`** folder deployable to **Firebase Hosting**.
+- Use **Material UI (MUI)**
+- **No backend**, no auth, no secrets
+- Runs fully **in the browser**
+- Must build to `dist/` and be deployable to **Firebase Hosting**
 
-## What the evaluator must see (core value)
-The evaluator must be able to paste a workflow text and click **Run Translation** and then see the full “translation journey” with intermediate outputs, not just the final code.
-
-## UI requirements (MUI)
-Use MUI to create a professional layout.
+## 2) UI: make the pipeline visible (this is the core)
+Use MUI to create a product-quality experience.
 
 ### AppShell
-- `AppBar` with:
-  - Title: “Rule Automation Studio”
-  - Subtitle: “Workflow → Rules, with traceability”
-  - Buttons: `Load Sample`, `Run Translation`, `Reset`
-- `Container` max width `lg`
+- `AppBar` with title “Rule Automation Studio” and subtitle “Agent execution workflow + artifacts”.
+- Buttons: `Run Pipeline`, `Run with Sample Data`, `Reset`.
 
-### Main layout (3-column on desktop, stacked on mobile)
+### 3-panel layout (desktop), stacked on mobile
 Use `Grid`:
 
-1) **Left panel**: `Paper` containing:
-- `TextField multiline` for Workflow Text (monospace toggle optional)
-- `TextField` for optional Rule Name override
-- Small helper text: “Sanitized content only”
+#### Left: Inputs (Paper)
+- Upload control for **Visio file** (`.vsdx/.vsd`). Store in memory only. Show filename/size.
+- Optional upload controls:
+  - PDF upload (optional)
+  - Images upload (optional)
+- Textarea: **Vision JSON override** (optional). If provided, Agent C uses this instead of simulated Vision output.
+- Input field: optional Rule Name override.
 
-2) **Middle panel**: `Paper` containing a **Stepper** (vertical preferred)
-Stages (must be exactly these, with icons):
-1. Normalize
-2. Legend
-3. Entities (tables/prefixes)
-4. Steps & Decisions
-5. Patterns
-6. Codegen
+#### Middle: Agent Pipeline (Paper)
+Show a **vertical Stepper** (or node graph if you prefer) containing these 8 stages, exactly:
+- Agent A: Visio→PDF Converter
+- Agent B: PDF→Images Converter
+- Agent C: Vision Extractor
+- Agent D: JSON Analyzer
+- Agent E: RAG Pattern Learner
+- Agent F: TypeScript Rule Generator
+- Agent G: Validator/Compiler
 
-Each step shows:
-- A one-line explanation (“what we do here”)
-- A compact output preview (list/table/short JSON)
-- `Chip` status: ✅ Complete or ⚠️ Warning (e.g. “Legend not found”)
+Each stage row must show:
+- status chip: Pending / Running / Completed / Warning / Failed
+- duration
+- a “SIMULATED” badge if applicable
 
-3) **Right panel**: `Paper` containing `Tabs`:
-- Tab 1: **Summary** (human-readable)
-- Tab 2: **Analysis JSON** (pretty printed, scrollable, code font)
-- Tab 3: **Generated TypeScript** (scrollable, code font)
+Clicking a stage selects it and updates the right panel content.
 
-### Actions bar
-Under tabs, add MUI buttons:
-- Download `analysis.json`
-- Download `GeneratedRule.ts`
-- Download `journey.md` (a readable report of each stage)
-- Copy “Share Summary” to clipboard
+#### Right: Stage Details (Paper)
+Tabs:
+- **Input** (what this stage consumed)
+- **Output** (what this stage produced)
+- **Logs** (timestamped logs, like a job console)
+- **Artifacts** (download links for files produced)
 
-### Trace mode
-Add a `Switch` “Show trace”. When enabled, show an accordion list of trace events per stage:
-- which regex/rule fired
-- a short input snippet
-- a short output snippet
+Also include:
+- A top-level “Run timeline” panel listing all stage events with timestamps.
+- A top-level “Artifacts Explorer” listing all produced artifacts.
 
-## Data model contract (must implement)
-Create a single output object:
+## 3) Execution behavior (must feel like a real run)
+When the user clicks **Run Pipeline**:
+- Execute stages sequentially with small delays (300–900ms) so progress is visible.
+- Append logs continuously.
+- Each stage produces an output object and optionally an artifact.
 
-```ts
-type JourneyStageId =
-  | "normalize"
-  | "legend"
-  | "entities"
-  | "steps"
-  | "patterns"
-  | "codegen";
+### Artifacts that must exist
+Provide downloadable artifacts (as Blob downloads) with these names:
+- `workflow.pdf` (simulated)
+- `page-1.png`, `page-2.png` (simulated; generate via canvas with “Page 1/2” text)
+- `vision.json`
+- `analysis.json`
+- `rag-results.json`
+- `GeneratedRule.ts`
+- `compile-report.json`
+- `journey.md`
 
-type JourneyTraceEvent = {
-  stage: JourneyStageId;
-  rule: string;
-  inputSample?: string;
-  outputSample?: string;
-  notes?: string;
-};
+## 4) Simulated Vision JSON (realistic shape)
+Create a realistic `vision.json` structure, for example including:
+- `title`, `domain`
+- `legend` array (abbreviation → meaning)
+- `detectedTables` array
+- `steps` array (id, text, type action/decision)
+- `edges` array for decision flow
 
-type Analysis = {
-  title?: string;
-  domain?: string;
-  normalizedText: string;
-  legend: Array<{ abbr: string; meaning: string }>;
-  detectedTables: string[];
-  tablePrefixes: Array<{ prefix: string; count: number }>;
-  steps: Array<{ id: string; text: string; type: "action" | "decision" }>;
-  decisionEdges: Array<{ from: string; to: string; label?: "YES" | "NO" | "NEXT" }>;
-};
+If user provides Vision JSON override, validate it lightly and use it.
 
-type Patterns = {
-  naming: { ruleClassName: string; fileName: string };
-  intent: string;
-  dataAccessPlan: { reads: string[]; writes: string[] };
-  confidence: number; // 0–100
-};
+## 5) Simulated RAG (local rule library)
+Include a small in-app dataset of 8–12 “existing rules”, each with:
+- ruleName
+- domain (AUTH/APPEAL/etc.)
+- referenced tables
+- short code snippet
 
-type JourneyOutput = {
-  analysis: Analysis;
-  patterns: Patterns;
-  generatedTs: string;
-  summaryText: string;
-  journeyMd: string;
-  trace: JourneyTraceEvent[];
-};
-```
+Implement in-browser retrieval scoring based on:
+- keyword overlap with steps
+- table prefix overlap
+- domain match
 
-## Deterministic parsing logic (no AI)
-Implement these stages with regex + heuristics and generate trace events.
+Return top 3 matches with scores and explain “patterns learned” (naming, common tables, common step types).
 
-### 1) Normalize
-- trim, normalize whitespace
-- attempt to detect `Title:` and `Domain:`
-- output `normalizedText`
+## 6) TypeScript scaffold generation
+Generate `GeneratedRule.ts` with:
+- header comment listing detected legend + tables + prefixes
+- class name derived from title/rule name
+- `execute(params)` method
+- TODO blocks per extracted step
+No proprietary imports and no DB calls.
 
-### 2) Legend extraction
-- detect section headers: `Legend`, `LEGEND`
-- parse lines like:
-  - `ABC = meaning`
-  - `ABC: meaning`
-- stop at blank line or next header-like line
+## 7) Validator/Compiler simulation
+Create `compile-report.json` with checks like:
+- class name is valid
+- file name matches rule name
+- no forbidden identifiers
+- basic “balanced braces” check
+- TODOs present
 
-### 3) Entities (tables/prefixes)
-- extract uppercase underscore tokens >= 6 chars:
-  - regex example: `\b[A-Z][A-Z0-9]{1,10}_[A-Z0-9_]{3,}\b`
-- dedupe + sort
-- prefixes: substring up to first `_` (include underscore, e.g. `MAP_`)
-- count prefixes and show as a small table
+Report overall: PASS/WARN/FAIL.
 
-### 4) Steps & decisions
-- split steps via:
-  - numbered: `1.`, `2)`, `Step 1:`
-  - bullets: `-`, `*`
-- decision detection: lines containing `IF`, `ELSE`, `WHEN`, `THEN`, `?`, `APPROVE`, `REJECT`
-- build a simple graph:
-  - sequential NEXT edges
-  - if IF/ELSE patterns present, add YES/NO edges where reasonable
+## 8) README (required)
+Provide `README.md` with:
+- local run steps
+- build steps
+- Firebase Hosting deploy steps (public dir = `dist`)
+- a section “What is simulated vs production”
 
-### 5) Patterns
-- infer class name from Title or first meaningful line → PascalCase
-- infer intent using keywords (validate, route, calculate, create task, update, etc.)
-- reads = detected tables
-- writes detected if contains `UPDATE|INSERT|CREATE|SAVE|SET`
-- confidence scoring:
-  - +20 title/domain present
-  - +20 legend present
-  - +20 tables >= 3
-  - +20 steps >= 5
-  - +20 decisions >= 1
-  - clamp 0–100
-
-### 6) Codegen
-Generate a TypeScript scaffold:
-- header comment listing legend/tables/prefixes
-- class `${ruleClassName}`
-- method `execute(params)` with TODO blocks per step/decision
-- no proprietary imports, no DB calls
-
-## Sample workflow
-Include a built-in sample workflow showing:
-- title + domain
-- legend with 5 abbreviations
-- 8–12 steps
-- 2 decisions
-- 8–15 tables from multiple prefixes
-
-## Deliverables
-- Full runnable project
-- `README.md` with:
-  - local run steps
-  - Firebase Hosting deployment steps (public dir = `dist`)
-- Scripts in `package.json`: `dev`, `build`, `preview`
-
-## Additional polish
-- Use MUI theme (dark mode default)
-- Error handling: never blank screen; show `Alert` with friendly message
-- If a stage finds nothing, show “⚠️ Not found” plus tips
-- Buttons enable/disable properly
-- Provide `journey.md` export explaining each stage and findings
+## 9) Strong instruction to the generator
+Do NOT build a single “parse workflow text” tool. This must be a **multi-stage agent pipeline visualizer** with 8 explicit stages and per-stage **logs + artifacts + timeline**.
 
 Build the complete project now.
